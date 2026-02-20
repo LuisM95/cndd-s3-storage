@@ -2,6 +2,9 @@
 
 import reflex as rx
 from .pages.login import login_page
+from .pages.dashboard import dashboard_page
+from .pages.files import files_page
+
 
 class State(rx.State):
     """Estado  Global de la Aplicacion"""
@@ -28,3 +31,5 @@ app = rx.App()
 #Agregar paginas
 app.add_page(index, route='/')
 app.add_page(login_page, route='/login')
+app.add_page(dashboard_page, route='/dashboard')
+app.add_page(files_page, route='/files')

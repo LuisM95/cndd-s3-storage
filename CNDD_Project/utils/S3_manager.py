@@ -210,4 +210,4 @@ class S3Manager:
         except ClientError as e:
             return False, None, f"Error generando URL: {str(e)}"
         except Exception as e:
-            return False, None, f"Error inesperado: {str(e)}”
+            return False, None, f"Error inesperado: {str(e)}"
