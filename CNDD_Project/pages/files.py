@@ -5,13 +5,13 @@ Página de gestión de archivos S3
 import reflex as rx
 from typing import List
 from ..utils.S3_manager import S3Manager
-#from ..components.navbar import navbar
+from ..components.navbar import navbar
 
 
 class FilesState(rx.State):
     """Estado de la página de archivos."""
     
-    # Datos del usuario (se establecerán desde login)
+    # Datos del usuario (sincronizados desde GlobalState)
     username: str = "usuario@ejemplo.com"
     role: str = "solo-lectura"
     
@@ -24,8 +24,18 @@ class FilesState(rx.State):
     success_message: str = ""
     search_query: str = ""
     
-    def on_mount(self):
+    async def on_mount(self):
         """Inicializar al cargar la página."""
+        from ..state import GlobalState
+        
+        # Obtener estado global
+        global_state = await self.get_state(GlobalState)
+        
+        # Sincronizar datos del usuario
+        self.username = global_state.username or "usuario@ejemplo.com"
+        self.role = global_state.role or "solo-lectura"
+        
+        # Cargar buckets
         self.load_buckets()
     
     def load_buckets(self):
@@ -38,12 +48,16 @@ class FilesState(rx.State):
             if self.available_buckets:
                 self.selected_bucket = self.available_buckets[0]
                 self.load_files()
+            else:
+                self.error_message = "No tienes acceso a ningún bucket"
         except Exception as e:
             self.error_message = f"Error cargando buckets: {str(e)}"
     
     def select_bucket(self, bucket: str):
         """Cambiar el bucket seleccionado."""
         self.selected_bucket = bucket
+        self.error_message = ""
+        self.success_message = ""
         self.load_files()
     
     def load_files(self):
@@ -62,7 +76,11 @@ class FilesState(rx.State):
             if success:
                 self.files = files
                 total = len(files)
-                self.success_message = f"Se encontraron {total} archivos"
+                if total > 0:
+                    # Usar texto estático con "s"
+                    self.success_message = f"Se encontraron {total} archivos"
+                else:
+                    self.success_message = "El bucket está vacío"
             else:
                 self.error_message = error
                 self.files = []
@@ -90,6 +108,7 @@ class FilesState(rx.State):
     
     def refresh_files(self):
         """Refrescar lista de archivos."""
+        self.search_query = ""
         self.load_files()
     
     @rx.var
@@ -106,6 +125,16 @@ class FilesState(rx.State):
     def can_delete(self) -> bool:
         """Verificar si el usuario puede eliminar archivos."""
         return self.role in ['admin', 'lectura-escritura']
+    
+    @rx.var
+    def bucket_count(self) -> int:
+        """Número de buckets disponibles."""
+        return len(self.available_buckets)
+    
+    @rx.var
+    def file_count(self) -> int:
+        """Número de archivos (filtrados)."""
+        return len(self.filtered_files)
 
 
 def files_page() -> rx.Component:
@@ -117,61 +146,108 @@ def files_page() -> rx.Component:
         # Contenido principal
         rx.container(
             rx.vstack(
-                # Selector de bucket y búsqueda
+                # Header con información
                 rx.hstack(
-                    # Selector de bucket
                     rx.vstack(
-                        rx.text("Bucket:", size="2", weight="medium"),
-                        rx.select(
-                            FilesState.available_buckets,
-                            value=FilesState.selected_bucket,
-                            on_change=FilesState.select_bucket,
-                            size="3",
+                        rx.heading("Archivos S3", size="6"),
+                        rx.text(
+                            f"Gestiona tus archivos en los buckets disponibles",
+                            size="2",
+                            color="gray",
                         ),
                         align="start",
                         spacing="1",
                     ),
-                    
-                    # Barra de búsqueda
-                    rx.vstack(
-                        rx.text("Buscar:", size="2", weight="medium"),
-                        rx.input(
-                            placeholder="Buscar archivos...",
-                            value=FilesState.search_query,
-                            on_change=FilesState.set_search_query,
-                            size="3",
-                            width="300px",
-                        ),
-                        align="start",
-                        spacing="1",
-                    ),
-                    
                     rx.spacer(),
-                    
-                    # Botones de acción
                     rx.hstack(
-                        rx.button(
-                            rx.icon("refresh-cw", size=18),
-                            "Refrescar",
-                            on_click=FilesState.refresh_files,
+                        rx.badge(
+                            f"{FilesState.bucket_count} buckets",
+                            size="2",
+                            color_scheme="blue",
                             variant="soft",
-                            size="3",
                         ),
-                        rx.cond(
-                            FilesState.can_upload,
-                            rx.button(
-                                rx.icon("upload", size=18),
-                                "Subir archivo",
-                                size="3",
-                            ),
+                        rx.badge(
+                             f"{FilesState.file_count} archivos",
+                            size="2",
+                            color_scheme="green",
+                            variant="soft",
                         ),
                         spacing="2",
-                        align="center",
                     ),
-                    
                     width="100%",
-                    padding="1rem",
                     align="center",
+                    padding_bottom="1rem",
+                ),
+                
+                # Controles: Selector de bucket y búsqueda
+                rx.card(
+                    rx.hstack(
+                        # Selector de bucket
+                        rx.vstack(
+                            rx.text("Bucket:", size="2", weight="medium"),
+                            rx.select(
+                                FilesState.available_buckets,
+                                value=FilesState.selected_bucket,
+                                on_change=FilesState.select_bucket,
+                                size="3",
+                                placeholder="Selecciona un bucket",
+                            ),
+                            align="start",
+                            spacing="1",
+                            flex="1",
+                        ),
+                        
+                        # Barra de búsqueda
+                        rx.vstack(
+                            rx.text("Buscar:", size="2", weight="medium"),
+                            rx.input(
+                                placeholder="Buscar archivos por nombre...",
+                                value=FilesState.search_query,
+                                on_change=FilesState.set_search_query,
+                                size="3",
+                                width="100%",
+                            ),
+                            align="start",
+                            spacing="1",
+                            flex="2",
+                        ),
+                        
+                        # Botones de acción
+                        rx.vstack(
+                            rx.text(" ", size="2"),  # Spacer para alinear
+                            rx.hstack(
+                                rx.button(
+                                    rx.hstack(
+                                        rx.icon("refresh-cw", size=18),
+                                        rx.text("Refrescar"),
+                                        spacing="2",
+                                    ),
+                                    on_click=FilesState.refresh_files,
+                                    variant="soft",
+                                    size="3",
+                                ),
+                                rx.cond(
+                                    FilesState.can_upload,
+                                    rx.button(
+                                        rx.hstack(
+                                            rx.icon("upload", size=18),
+                                            rx.text("Subir archivo"),
+                                            spacing="2",
+                                        ),
+                                        size="3",
+                                    ),
+                                ),
+                                spacing="2",
+                            ),
+                            align="end",
+                            spacing="1",
+                        ),
+                        
+                        width="100%",
+                        spacing="4",
+                        align="end",
+                    ),
+                    size="2",
                 ),
                 
                 # Mensajes de error/éxito
@@ -187,8 +263,9 @@ def files_page() -> rx.Component:
                     FilesState.success_message != "",
                     rx.callout(
                         FilesState.success_message,
-                        icon="check-circle",
-                        color_scheme="green",
+                        icon="info",
+                        color_scheme="blue",
+                        variant="soft",
                     ),
                 ),
                 
@@ -196,8 +273,13 @@ def files_page() -> rx.Component:
                 rx.cond(
                     FilesState.loading,
                     rx.center(
-                        rx.spinner(size="3"),
-                        padding="2rem",
+                        rx.vstack(
+                            rx.spinner(size="3"),
+                            rx.text("Cargando archivos...", size="2", color="gray"),
+                            spacing="3",
+                            align="center",
+                        ),
+                        padding="3rem",
                     ),
                 ),
                 
@@ -206,267 +288,131 @@ def files_page() -> rx.Component:
                     ~FilesState.loading,
                     rx.cond(
                         FilesState.filtered_files,
-                        rx.table.root(
-                            rx.table.header(
-                                rx.table.row(
-                                    rx.table.column_header_cell("Nombre"),
-                                    rx.table.column_header_cell("Tamaño"),
-                                    rx.table.column_header_cell("Última modificación"),
-                                    rx.table.column_header_cell("Acciones"),
-                                ),
-                            ),
-                            rx.table.body(
-                                rx.foreach(
-                                    FilesState.filtered_files,
-                                    lambda file: rx.table.row(
-                                        rx.table.cell(
-                                            rx.hstack(
-                                                rx.icon("file", size=18),
-                                                rx.text(file['name']),
-                                                spacing="2",
+                        rx.card(
+                            rx.box(
+                                rx.table.root(
+                                    rx.table.header(
+                                        rx.table.row(
+                                            rx.table.column_header_cell(
+                                                rx.hstack(
+                                                    rx.icon("file", size=16),
+                                                    rx.text("Nombre"),
+                                                    spacing="2",
+                                                ),
                                             ),
-                                        ),
-                                        rx.table.cell(
-                                            rx.text(f"{file['size_mb']} MB"),
-                                        ),
-                                        rx.table.cell(
-                                            rx.text(file['last_modified']),
-                                        ),
-                                        rx.table.cell(
-                                            rx.hstack(
-                                                rx.cond(
-                                                    FilesState.can_download,
-                                                    rx.icon_button(
-                                                        rx.icon("download", size=16),
-                                                        size="1",
-                                                        variant="soft",
-                                                        color_scheme="blue",
-                                                    ),
+                                            rx.table.column_header_cell(
+                                                rx.hstack(
+                                                    rx.icon("hard-drive", size=16),
+                                                    rx.text("Tamaño"),
+                                                    spacing="2",
                                                 ),
-                                                rx.cond(
-                                                    FilesState.can_delete,
-                                                    rx.icon_button(
-                                                        rx.icon("trash-2", size=16),
-                                                        size="1",
-                                                        variant="soft",
-                                                        color_scheme="red",
-                                                    ),
+                                            ),
+                                            rx.table.column_header_cell(
+                                                rx.hstack(
+                                                    rx.icon("clock", size=16),
+                                                    rx.text("Última modificación"),
+                                                    spacing="2",
                                                 ),
-                                                spacing="2",
+                                            ),
+                                            rx.table.column_header_cell(
+                                                rx.hstack(
+                                                    rx.icon("settings", size=16),
+                                                    rx.text("Acciones"),
+                                                    spacing="2",
+                                                ),
                                             ),
                                         ),
                                     ),
+                                    rx.table.body(
+                                        rx.foreach(
+                                            FilesState.filtered_files,
+                                            lambda file: rx.table.row(
+                                                rx.table.cell(
+                                                    rx.hstack(
+                                                        rx.icon("file-text", size=18, color="blue"),
+                                                        rx.text(
+                                                            file['name'],
+                                                            weight="medium",
+                                                        ),
+                                                        spacing="2",
+                                                        align="center",
+                                                    ),
+                                                ),
+                                                rx.table.cell(
+                                                    rx.badge(
+                                                        f"{file['size_mb']} MB",
+                                                        size="1",
+                                                        variant="soft",
+                                                    ),
+                                                ),
+                                                rx.table.cell(
+                                                    rx.text(
+                                                        file['last_modified'],
+                                                        size="2",
+                                                        color="gray",
+                                                    ),
+                                                ),
+                                                rx.table.cell(
+                                                    rx.hstack(
+                                                        rx.cond(
+                                                            FilesState.can_download,
+                                                            rx.tooltip(
+                                                                rx.icon_button(
+                                                                    rx.icon("download", size=16),
+                                                                    size="1",
+                                                                    variant="soft",
+                                                                    color_scheme="blue",
+                                                                ),
+                                                                content="Descargar archivo",
+                                                            ),
+                                                        ),
+                                                        rx.cond(
+                                                            FilesState.can_delete,
+                                                            rx.tooltip(
+                                                                rx.icon_button(
+                                                                    rx.icon("trash-2", size=16),
+                                                                    size="1",
+                                                                    variant="soft",
+                                                                    color_scheme="red",
+                                                                ),
+                                                                content="Eliminar archivo",
+                                                            ),
+                                                        ),
+                                                        spacing="2",
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                    variant="surface",
+                                    width="100%",
                                 ),
+                                width="100%",
+                                overflow_x="auto",
                             ),
-                            variant="surface",
-                            width="100%",
+                            size="2",
                         ),
-                        # Sin archivos
+                        # Estado vacío
                         rx.center(
                             rx.vstack(
-                                rx.icon("folder-open", size=48, color="gray"),
+                                rx.icon("folder-open", size=64, color="gray"),
+                                rx.heading(
+                                    "No hay archivos",
+                                    size="5",
+                                    color="gray",
+                                ),
                                 rx.text(
-                                    "No hay archivos en este bucket",
-                                    size="4",
+                                    rx.cond(
+                                        FilesState.search_query != "",
+                                        f"No se encontraron archivos que coincidan con '{FilesState.search_query}'",
+                                        "Este bucket está vacío",
+                                    ),
+                                    size="3",
                                     color="gray",
                                 ),
                                 spacing="4",
                                 align="center",
-                                padding="3rem",
-                            ),
-                        ),
-                    ),
-                ),
-                
-                spacing="4",
-                width="100%",
-            ),
-            max_width="1400px",
-            padding="2rem",
-        ),
-        
-        spacing="0",
-        min_height="100vh",
-        background="var(--gray-2)",
-        on_mount=FilesState.on_mount,
-    )
-    """Página de gestión de archivos."""
-    return rx.vstack(
-        # Header
-        rx.hstack(
-            rx.heading("Gestión de Archivos S3", size="7"),
-            rx.spacer(),
-            rx.badge(FilesState.role, size="2", color_scheme="blue"),
-            rx.button(
-                "Dashboard",
-                on_click=rx.redirect("/dashboard"),
-                variant="soft",
-            ),
-            width="100%",
-            padding="1rem",
-            background="white",
-            border_bottom="1px solid var(--gray-6)",
-        ),
-        
-        # Contenido principal
-        rx.container(
-            rx.vstack(
-                # Selector de bucket y búsqueda
-                rx.hstack(
-                    # Selector de bucket
-                    rx.vstack(
-                        rx.text("Bucket:", size="2", weight="medium"),
-                        rx.select(
-                            FilesState.available_buckets,
-                            value=FilesState.selected_bucket,
-                            on_change=FilesState.select_bucket,
-                            size="3",
-                        ),
-                        align="start",
-                        spacing="1",
-                    ),
-                    
-                    # Barra de búsqueda
-                    rx.vstack(
-                        rx.text("Buscar:", size="2", weight="medium"),
-                        rx.input(
-                            placeholder="Buscar archivos...",
-                            value=FilesState.search_query,
-                            on_change=FilesState.set_search_query,
-                            size="3",
-                            width="300px",
-                        ),
-                        align="start",
-                        spacing="1",
-                    ),
-                    
-                    rx.spacer(),
-                    
-                    # Botones de acción
-                    rx.hstack(
-                        rx.button(
-                            rx.icon("refresh-cw", size=18),
-                            "Refrescar",
-                            on_click=FilesState.refresh_files,
-                            variant="soft",
-                            size="3",
-                        ),
-                        rx.cond(
-                            FilesState.can_upload(),
-                            rx.button(
-                                rx.icon("upload", size=18),
-                                "Subir archivo",
-                                size="3",
-                            ),
-                        ),
-                        spacing="2",
-                        align="center",
-                    ),
-                    
-                    width="100%",
-                    padding="1rem",
-                    align="center",
-                ),
-                
-                # Mensajes de error/éxito
-                rx.cond(
-                    FilesState.error_message != "",
-                    rx.callout(
-                        FilesState.error_message,
-                        icon="triangle-alert",
-                        color_scheme="red",
-                    ),
-                ),
-                rx.cond(
-                    FilesState.success_message != "",
-                    rx.callout(
-                        FilesState.success_message,
-                        icon="check-circle",
-                        color_scheme="green",
-                    ),
-                ),
-                
-                # Indicador de carga
-                rx.cond(
-                    FilesState.loading,
-                    rx.center(
-                        rx.spinner(size="3"),
-                        padding="2rem",
-                    ),
-                ),
-                
-                # Tabla de archivos
-                rx.cond(
-                    ~FilesState.loading,
-                    rx.cond(
-                        FilesState.filtered_files.length() > 0,
-                        rx.table.root(
-                            rx.table.header(
-                                rx.table.row(
-                                    rx.table.column_header_cell("Nombre"),
-                                    rx.table.column_header_cell("Tamaño"),
-                                    rx.table.column_header_cell("Última modificación"),
-                                    rx.table.column_header_cell("Acciones"),
-                                ),
-                            ),
-                            rx.table.body(
-                                rx.foreach(
-                                    FilesState.filtered_files,
-                                    lambda file: rx.table.row(
-                                        rx.table.cell(
-                                            rx.hstack(
-                                                rx.icon("file", size=18),
-                                                rx.text(file['name']),
-                                                spacing="2",
-                                            ),
-                                        ),
-                                        rx.table.cell(
-                                            rx.text(f"{file['size_mb']} MB"),
-                                        ),
-                                        rx.table.cell(
-                                            rx.text(file['last_modified']),
-                                        ),
-                                        rx.table.cell(
-                                            rx.hstack(
-                                                rx.cond(
-                                                    FilesState.can_download(),
-                                                    rx.icon_button(
-                                                        rx.icon("download", size=16),
-                                                        size="1",
-                                                        variant="soft",
-                                                        color_scheme="blue",
-                                                    ),
-                                                ),
-                                                rx.cond(
-                                                    FilesState.can_delete(),
-                                                    rx.icon_button(
-                                                        rx.icon("trash-2", size=16),
-                                                        size="1",
-                                                        variant="soft",
-                                                        color_scheme="red",
-                                                    ),
-                                                ),
-                                                spacing="2",
-                                            ),
-                                        ),
-                                    ),
-                                ),
-                            ),
-                            variant="surface",
-                            width="100%",
-                        ),
-                        # Sin archivos
-                        rx.center(
-                            rx.vstack(
-                                rx.icon("folder-open", size=48, color="gray"),
-                                rx.text(
-                                    "No hay archivos en este bucket",
-                                    size="4",
-                                    color="gray",
-                                ),
-                                spacing="4",
-                                align="center",
-                                padding="3rem",
+                                padding="4rem",
                             ),
                         ),
                     ),

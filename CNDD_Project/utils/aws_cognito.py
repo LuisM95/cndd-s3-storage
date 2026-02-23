@@ -30,6 +30,10 @@ class CognitoAuth:
         """
         Autenticar usuario con Cognito.
         
+        Args:
+            username: Email del usuario
+            password: Contraseña
+        
         Returns:
             Tuple (éxito, datos_usuario, mensaje_error)
         """
@@ -50,6 +54,10 @@ class CognitoAuth:
             # Obtener info del usuario y sus grupos
             user_info = self.get_user_info(access_token)
             groups = self.get_user_groups(username)
+
+            # DEBUG - Ver qué contiene user_info
+            print(f"DEBUG Cognito - user_info completo: {user_info}")
+            print(f"DEBUG Cognito - user_info['attributes']: {user_info.get('attributes', {})}")
             
             # Validar que el usuario tenga un grupo asignado
             if not groups:
@@ -58,14 +66,36 @@ class CognitoAuth:
             # Determinar el rol principal (primer grupo)
             role = groups[0]
             
+            # Extraer el nombre del usuario (si existe)
+            user_name = user_info.get('attributes', {}).get('name', '')
+            
+            # DEBUG - Ver extracción del nombre
+            print(f"DEBUG Cognito - Atributo 'name' en attributes: '{user_info.get('attributes', {}).get('name', 'NO ENCONTRADO')}'")
+            print(f"DEBUG Cognito - user_name extraído: '{user_name}'")
+            
+            if not user_name:
+                # Si no tiene nombre, usar el email
+                user_name = username
+                print(f"DEBUG Cognito - No había nombre, usando email: '{user_name}'")
+
+            #Debug
+            print(f"DEBUG Cognito - user_info completo: {user_info}")
+            print(f"DEBUG Cognito - user_name extraído: '{user_name}'")
+            
             user_data = {
                 'username': username,
+                'name': user_name,
+                'email': username,
                 'access_token': access_token,
                 'id_token': id_token,
                 'role': role,
                 'groups': groups,
                 'user_info': user_info
             }
+
+            # DEBUG
+            # DEBUG - Verificar user_data
+            print(f"DEBUG Cognito - user_data['name'] final: '{user_data['name']}'")
             
             return True, user_data, None
             
@@ -77,7 +107,15 @@ class CognitoAuth:
             return False, None, f"Error: {str(e)}"
     
     def get_user_info(self, access_token: str) -> Dict:
-        """Obtener información del usuario."""
+        """
+        Obtener información del usuario.
+        
+        Args:
+            access_token: Token de acceso de Cognito
+        
+        Returns:
+            Diccionario con información del usuario
+        """
         try:
             response = self.client.get_user(AccessToken=access_token)
             
@@ -96,7 +134,15 @@ class CognitoAuth:
             return {}
     
     def get_user_groups(self, username: str) -> List[str]:
-        """Obtener grupos del usuario en Cognito."""
+        """
+        Obtener grupos del usuario en Cognito.
+        
+        Args:
+            username: Nombre del usuario
+        
+        Returns:
+            Lista de nombres de grupos
+        """
         try:
             response = self.client.admin_list_groups_for_user(
                 UserPoolId=self.user_pool_id,
@@ -110,22 +156,36 @@ class CognitoAuth:
             print(f"Error obteniendo grupos: {e}")
             return []
     
-    def create_user(self, username: str, password: str, email: str, group: str) -> Tuple[bool, Optional[str]]:
+    def create_user(self, username: str, password: str, email: str, group: str, name: str = "") -> Tuple[bool, Optional[str]]:
         """
         Crear un nuevo usuario (solo admin).
+        
+        Args:
+            username: Email del usuario (será el username)
+            password: Contraseña
+            email: Email (mismo que username en Cognito)
+            group: Grupo/rol a asignar
+            name: Nombre completo del usuario (opcional)
         
         Returns:
             Tuple (éxito, mensaje_error)
         """
         try:
+            # Preparar atributos del usuario
+            user_attributes = [
+                {'Name': 'email', 'Value': email},
+                {'Name': 'email_verified', 'Value': 'true'}
+            ]
+            
+            # Agregar nombre si se proporciona
+            if name:
+                user_attributes.append({'Name': 'name', 'Value': name})
+            
             # Crear usuario
             self.client.admin_create_user(
                 UserPoolId=self.user_pool_id,
                 Username=username,
-                UserAttributes=[
-                    {'Name': 'email', 'Value': email},
-                    {'Name': 'email_verified', 'Value': 'true'}
-                ],
+                UserAttributes=user_attributes,
                 TemporaryPassword=password,
                 MessageAction='SUPPRESS'
             )
@@ -150,3 +210,66 @@ class CognitoAuth:
             
         except Exception as e:
             return False, f"Error creando usuario: {str(e)}"
+    
+    def update_user_name(self, username: str, name: str) -> Tuple[bool, Optional[str]]:
+        """
+        Actualizar el nombre de un usuario existente.
+        
+        Args:
+            username: Email del usuario
+            name: Nuevo nombre completo
+        
+        Returns:
+            Tuple (éxito, mensaje_error)
+        """
+        try:
+            self.client.admin_update_user_attributes(
+                UserPoolId=self.user_pool_id,
+                Username=username,
+                UserAttributes=[
+                    {'Name': 'name', 'Value': name}
+                ]
+            )
+            return True, None
+            
+        except Exception as e:
+            return False, f"Error actualizando nombre: {str(e)}"
+    
+    def list_all_users(self) -> Tuple[bool, List[Dict], Optional[str]]:
+        """
+        Listar todos los usuarios del User Pool.
+        
+        Returns:
+            Tuple (éxito, lista_usuarios, mensaje_error)
+        """
+        try:
+            response = self.client.list_users(
+                UserPoolId=self.user_pool_id
+            )
+            
+            users = []
+            for user in response.get('Users', []):
+                # Extraer atributos
+                attributes = {}
+                for attr in user.get('Attributes', []):
+                    attributes[attr['Name']] = attr['Value']
+                
+                # Obtener grupos del usuario
+                groups = self.get_user_groups(user['Username'])
+                
+                user_info = {
+                    'username': user['Username'],
+                    'email': attributes.get('email', 'N/A'),
+                    'name': attributes.get('name', 'N/A'),
+                    'status': user['UserStatus'],
+                    'enabled': user['Enabled'],
+                    'created': user['UserCreateDate'].strftime('%Y-%m-%d %H:%M:%S'),
+                    'groups': groups,
+                    'role': groups[0] if groups else 'sin-grupo'
+                }
+                users.append(user_info)
+            
+            return True, users, None
+            
+        except Exception as e:
+            return False, [], f"Error listando usuarios: {str(e)}"

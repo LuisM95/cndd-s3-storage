@@ -36,13 +36,8 @@ class S3Manager:
     def get_available_buckets(self, role: str) -> List[str]:
         """
         Obtener buckets disponibles según el rol del usuario.
-        
-        Args:
-            role: Rol del usuario (admin, solo-lectura, etc.)
-            
-        Returns:
-            Lista de nombres de buckets disponibles
         """
+        print(f"DEBUG - S3Manager recibió rol: '{role}'")
         buckets = []
         
         if role == 'admin':

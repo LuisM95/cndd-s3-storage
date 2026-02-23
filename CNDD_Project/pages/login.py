@@ -26,38 +26,127 @@ class LoginState(rx.State):
         """Mostrar/Ocultar password"""
         self.show_password = not self.show_password
 
-    def handle_login(self):
-        """Manejar el login del usuario"""
-        #Validar Campos 
+    async def handle_login(self):
+        """Manejar el login."""
+        # Validar campos
         if not self.username or not self.password:
-            self.error_message = 'Por favor ingresar usuario y contraseña'
-            return 
+            self.error_message = "Por favor ingresa usuario y contraseña"
+            return
         
         self.loading = True
-        self.error_message = ''
-
-        try: 
+        self.error_message = ""
+        
+        try:
             # Autenticar con Cognito
             cognito = CognitoAuth()
             success, user_data, error = cognito.authenticate(
-                self.username,
+                self.username, 
                 self.password
             )
-
+            
             if success:
-                # Guardar datos en la sesion
-                self.username = user_data['username']
+                # Importar GlobalState
+                from ..state import GlobalState
+            
+                # Preparar datos del usuario
+                user_info = {
+                    'username': user_data['username'],
+                    'name': user_data.get('name', ''),
+                    'email': user_data['username'],
+                    'role': user_data['role'],
+                    'access_token': user_data['access_token']
+                }
+            
+                # Guardar en sesión global
+                state = await self.get_state(GlobalState)
+                state.login_user(user_info)
 
-                #redirigir al dashboard 
-                return rx.redirect('/dashboard')
+                
+                
+                # Redirigir al dashboard
+                return rx.redirect("/dashboard")
             else:
                 self.error_message = error
-
+        
         except Exception as e:
-            self.error_message = f'Error: {str(e)}'
-
+            self.error_message = f"Error: {str(e)}"
+        
         finally:
             self.loading = False
+            """Manejar el login."""
+            # Validar campos
+            if not self.username or not self.password:
+                self.error_message = "Por favor ingresa usuario y contraseña"
+                return
+        
+        self.loading = True
+        self.error_message = ""
+        
+        try:
+            # Autenticar con Cognito
+            cognito = CognitoAuth()
+            success, user_data, error = cognito.authenticate(
+                self.username, 
+                self.password
+            )
+            
+            if success:
+                # Guardar en estado global
+                from ..state import GlobalState
+                
+                # Preparar datos del usuario
+                user_info = {
+                    'username': user_data['username'],
+                    'email': user_data['username'],  # En Cognito el username es el email
+                    'role': user_data['role'],
+                    'access_token': user_data['access_token']
+                }
+                
+                # Guardar en sesión global
+                GlobalState.login_user(user_info)
+                
+                # Redirigir al dashboard
+                return rx.redirect("/dashboard")
+            else:
+                self.error_message = error
+        
+        except Exception as e:
+            self.error_message = f"Error: {str(e)}"
+        
+        finally:
+            self.loading = False
+            
+            """Manejar el login del usuario"""
+            #Validar Campos 
+            if not self.username or not self.password:
+                self.error_message = 'Por favor ingresar usuario y contraseña'
+                return 
+            
+            self.loading = True
+            self.error_message = ''
+
+            try: 
+                # Autenticar con Cognito
+                cognito = CognitoAuth()
+                success, user_data, error = cognito.authenticate(
+                    self.username,
+                    self.password
+                )
+
+                if success:
+                    # Guardar datos en la sesion
+                    self.username = user_data['username']
+
+                    #redirigir al dashboard 
+                    return rx.redirect('/dashboard')
+                else:
+                    self.error_message = error
+
+            except Exception as e:
+                self.error_message = f'Error: {str(e)}'
+
+            finally:
+                self.loading = False
 
 def login_page() -> rx.Component:
     """Página de login."""

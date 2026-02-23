@@ -6,6 +6,7 @@ import reflex as rx
 from typing import List
 from ..utils.aws_cognito import CognitoAuth
 from ..utils.opensearch_client import OpenSearchClient
+from ..components.navbar import navbar
 
 
 class AdminState(rx.State):
@@ -22,6 +23,7 @@ class AdminState(rx.State):
     new_username: str = ""
     new_password: str = ""
     new_email: str = ""
+    new_name: str = ""
     new_group: str = "solo-lectura"
     create_loading: bool = False
     create_message: str = ""
@@ -37,8 +39,18 @@ class AdminState(rx.State):
     total_events: int = 0
     top_events: List[dict] = []
     
-    def on_mount(self):
+    async def on_mount(self):
         """Inicializar al cargar."""
+        from ..state import GlobalState
+        
+        # Obtener estado global
+        global_state = await self.get_state(GlobalState)
+        
+        # Sincronizar datos del usuario
+        self.username = global_state.username or "admin@ejemplo.com"
+        self.name = global_state.name or ''
+        self.role = global_state.role or "admin"
+        
         # Verificar que sea admin
         if self.role != "admin":
             return rx.redirect("/dashboard")
@@ -65,6 +77,12 @@ class AdminState(rx.State):
     def set_new_email(self, value: str):
         """Actualizar nuevo email."""
         self.new_email = value
+        self.create_message = ""
+        self.create_error = ""
+    
+    def set_new_name(self, value: str):
+        """Actualizar nuevo nombre."""
+        self.new_name = value
     
     def set_new_group(self, value: str):
         """Actualizar nuevo grupo."""
@@ -87,15 +105,18 @@ class AdminState(rx.State):
                 username=self.new_email,
                 password=self.new_password,
                 email=self.new_email,
-                group=self.new_group
+                group=self.new_group,
+                name=self.new_name
             )
             
             if success:
-                self.create_message = f"Usuario '{self.new_email}' creado exitosamente"
+                user_display = self.new_name if self.new_name else self.new_email
+                self.create_message = f"Usuario '{user_display}' creado exitosamente"
                 # Limpiar formulario
                 self.new_username = ""
                 self.new_password = ""
                 self.new_email = ""
+                self.new_name = ""
                 self.new_group = "solo-lectura"
             else:
                 self.create_error = error
@@ -178,21 +199,8 @@ class AdminState(rx.State):
 def admin_page() -> rx.Component:
     """Página de administración."""
     return rx.vstack(
-        # Header
-        rx.hstack(
-            rx.heading("Panel de Administración", size="7"),
-            rx.spacer(),
-            rx.badge("admin", size="2", color_scheme="red"),
-            rx.button(
-                "Dashboard",
-                on_click=rx.redirect("/dashboard"),
-                variant="soft",
-            ),
-            width="100%",
-            padding="1rem",
-            background="white",
-            border_bottom="1px solid var(--gray-6)",
-        ),
+        # Navbar
+        navbar('Panel de Administración'),
         
         # Contenido
         rx.container(
@@ -208,6 +216,12 @@ def admin_page() -> rx.Component:
                     rx.tabs.content(
                         rx.vstack(
                             rx.heading("Crear Nuevo Usuario", size="5"),
+                            rx.text(
+                                "Complete el formulario para crear un nuevo usuario en el sistema",
+                                size="2",
+                                color="gray",
+                                margin_bottom="1rem",
+                            ),
                             
                             rx.card(
                                 rx.vstack(
@@ -221,15 +235,30 @@ def admin_page() -> rx.Component:
                                         width="100%",
                                     ),
                                     
+                                    # Nombre completo
+                                    rx.text("Nombre completo:", size="3", weight="medium", margin_top="1rem"),
+                                    rx.input(
+                                        placeholder="Juan Pérez (opcional)",
+                                        value=AdminState.new_name,
+                                        on_change=AdminState.set_new_name,
+                                        size="3",
+                                        width="100%",
+                                    ),
+                                    
                                     # Contraseña
                                     rx.text("Contraseña:", size="3", weight="medium", margin_top="1rem"),
                                     rx.input(
-                                        placeholder="Mínimo 8 caracteres",
+                                        placeholder="Mínimo 8 caracteres, con mayúsculas y números",
                                         type="password",
                                         value=AdminState.new_password,
                                         on_change=AdminState.set_new_password,
                                         size="3",
                                         width="100%",
+                                    ),
+                                    rx.text(
+                                        "Debe contener: mayúsculas, minúsculas y números",
+                                        size="1",
+                                        color="gray",
                                     ),
                                     
                                     # Grupo/Rol
@@ -239,6 +268,24 @@ def admin_page() -> rx.Component:
                                         value=AdminState.new_group,
                                         on_change=AdminState.set_new_group,
                                         size="3",
+                                    ),
+                                    
+                                    # Descripción de roles
+                                    rx.box(
+                                        rx.vstack(
+                                            rx.text("Descripción de roles:", size="2", weight="bold"),
+                                            rx.text("• Solo lectura: Listar archivos únicamente", size="1"),
+                                            rx.text("• Lectura/Escritura: Subir, descargar y eliminar archivos", size="1"),
+                                            rx.text("• Solo carga: Listar y subir archivos", size="1"),
+                                            rx.text("• Solo descarga: Listar y descargar archivos", size="1"),
+                                            rx.text("• Admin: Acceso completo al sistema", size="1"),
+                                            spacing="1",
+                                            align="start",
+                                        ),
+                                        background="var(--gray-2)",
+                                        padding="0.75rem",
+                                        border_radius="6px",
+                                        margin_top="0.5rem",
                                     ),
                                     
                                     # Mensajes
@@ -255,7 +302,7 @@ def admin_page() -> rx.Component:
                                         AdminState.create_message != "",
                                         rx.callout(
                                             AdminState.create_message,
-                                            icon="check-circle",
+                                            icon="check",
                                             color_scheme="green",
                                             margin_top="1rem",
                                         ),
@@ -270,7 +317,11 @@ def admin_page() -> rx.Component:
                                                 rx.text("Creando..."),
                                                 spacing="2",
                                             ),
-                                            rx.text("Crear Usuario"),
+                                            rx.hstack(
+                                                rx.icon("user-plus", size=18),
+                                                rx.text("Crear Usuario"),
+                                                spacing="2",
+                                            ),
                                         ),
                                         on_click=AdminState.create_user,
                                         size="3",
@@ -280,7 +331,7 @@ def admin_page() -> rx.Component:
                                     
                                     spacing="2",
                                 ),
-                                max_width="500px",
+                                max_width="600px",
                             ),
                             
                             spacing="4",
@@ -293,6 +344,14 @@ def admin_page() -> rx.Component:
                     # Pestaña: Ver Logs
                     rx.tabs.content(
                         rx.vstack(
+                            rx.heading("Logs de Auditoría", size="5"),
+                            rx.text(
+                                "Visualice los eventos de CloudTrail registrados en OpenSearch",
+                                size="2",
+                                color="gray",
+                                margin_bottom="1rem",
+                            ),
+                            
                             # Búsqueda y estadísticas
                             rx.hstack(
                                 rx.input(
@@ -303,14 +362,20 @@ def admin_page() -> rx.Component:
                                     width="400px",
                                 ),
                                 rx.button(
-                                    rx.icon("search", size=18),
-                                    "Buscar",
+                                    rx.hstack(
+                                        rx.icon("search", size=18),
+                                        rx.text("Buscar"),
+                                        spacing="2",
+                                    ),
                                     on_click=AdminState.search_logs,
                                     size="3",
                                 ),
                                 rx.button(
-                                    rx.icon("refresh-cw", size=18),
-                                    "Refrescar",
+                                    rx.hstack(
+                                        rx.icon("refresh-cw", size=18),
+                                        rx.text("Refrescar"),
+                                        spacing="2",
+                                    ),
                                     on_click=AdminState.load_recent_logs,
                                     variant="soft",
                                     size="3",
@@ -322,6 +387,7 @@ def admin_page() -> rx.Component:
                                     f"Total eventos: {AdminState.total_events}",
                                     size="2",
                                     color_scheme="blue",
+                                    variant="soft",
                                 ),
                                 
                                 width="100%",
@@ -342,8 +408,13 @@ def admin_page() -> rx.Component:
                             rx.cond(
                                 AdminState.logs_loading,
                                 rx.center(
-                                    rx.spinner(size="3"),
-                                    padding="2rem",
+                                    rx.vstack(
+                                        rx.spinner(size="3"),
+                                        rx.text("Cargando logs...", size="2", color="gray"),
+                                        spacing="3",
+                                        align="center",
+                                    ),
+                                    padding="3rem",
                                 ),
                             ),
                             
@@ -351,34 +422,74 @@ def admin_page() -> rx.Component:
                             rx.cond(
                                 ~AdminState.logs_loading,
                                 rx.cond(
-                                    AdminState.filtered_logs.length() > 0,
-                                    rx.table.root(
-                                        rx.table.header(
-                                            rx.table.row(
-                                                rx.table.column_header_cell("Timestamp"),
-                                                rx.table.column_header_cell("Evento"),
-                                                rx.table.column_header_cell("Usuario"),
-                                                rx.table.column_header_cell("IP"),
-                                                rx.table.column_header_cell("Recurso"),
-                                            ),
-                                        ),
-                                        rx.table.body(
-                                            rx.foreach(
-                                                AdminState.filtered_logs,
-                                                lambda log: rx.table.row(
-                                                    rx.table.cell(rx.text(log['timestamp'])),
-                                                    rx.table.cell(rx.badge(log['event_name'], size="1")),
-                                                    rx.table.cell(rx.text(log['user'])),
-                                                    rx.table.cell(rx.text(log['source_ip'])),
-                                                    rx.table.cell(rx.text(log['resource'], size="1")),
+                                    AdminState.filtered_logs,
+                                    rx.box(
+                                        rx.table.root(
+                                            rx.table.header(
+                                                rx.table.row(
+                                                    rx.table.column_header_cell("Timestamp"),
+                                                    rx.table.column_header_cell("Evento"),
+                                                    rx.table.column_header_cell("Usuario"),
+                                                    rx.table.column_header_cell("IP"),
+                                                    rx.table.column_header_cell("Recurso"),
                                                 ),
                                             ),
+                                            rx.table.body(
+                                                rx.foreach(
+                                                    AdminState.filtered_logs,
+                                                    lambda log: rx.table.row(
+                                                        rx.table.cell(
+                                                            rx.text(
+                                                                log['timestamp'],
+                                                                size="1",
+                                                            ),
+                                                        ),
+                                                        rx.table.cell(
+                                                            rx.badge(
+                                                                log['event_name'],
+                                                                size="1",
+                                                                color_scheme="blue",
+                                                                variant="soft",
+                                                            ),
+                                                        ),
+                                                        rx.table.cell(
+                                                            rx.text(
+                                                                log['user'],
+                                                                size="1",
+                                                            ),
+                                                        ),
+                                                        rx.table.cell(
+                                                            rx.text(
+                                                                log['source_ip'],
+                                                                size="1",
+                                                            ),
+                                                        ),
+                                                        rx.table.cell(
+                                                            rx.text(
+                                                                log['resource'],
+                                                                size="1",
+                                                            ),
+                                                        ),
+                                                    ),
+                                                ),
+                                            ),
+                                            variant="surface",
+                                            width="100%",
                                         ),
-                                        variant="surface",
                                         width="100%",
+                                        overflow_x="auto",
                                     ),
                                     rx.center(
-                                        rx.text("No se encontraron logs", color="gray"),
+                                        rx.vstack(
+                                            rx.icon("search-x", size=48, color="gray"),
+                                            rx.text(
+                                                "No se encontraron logs",
+                                                size="3",
+                                                color="gray",
+                                            ),
+                                            spacing="3",
+                                            align="center",
+                                        ),
                                         padding="3rem",
                                     ),
                                 ),
@@ -407,4 +518,3 @@ def admin_page() -> rx.Component:
         background="var(--gray-2)",
         on_mount=AdminState.on_mount,
     )
-

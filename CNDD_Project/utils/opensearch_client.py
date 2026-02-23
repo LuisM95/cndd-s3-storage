@@ -1,216 +1,4 @@
 """
-Gestor de operaciones con AWS S3
-"""
-
-import os
-import boto3
-from typing import List, Dict, Optional, Tuple
-from dotenv import load_dotenv
-from botocore.exceptions import ClientError
-
-# Cargar variables de entorno
-load_dotenv()
-
-
-class S3Manager:
-    """Clase para gestionar operaciones con S3."""
-    
-    def __init__(self, access_token: Optional[str] = None):
-        """
-        Inicializar cliente de S3.
-        
-        Args:
-            access_token: Token de acceso de Cognito (para credenciales temporales)
-        """
-        self.region = os.getenv('AWS_REGION')
-        
-        # Nombres de buckets desde .env
-        self.bucket_publica = os.getenv('BUCKET_PUBLICA')
-        self.bucket_proyectos = os.getenv('BUCKET_PROYECTOS')
-        self.bucket_rrhh = os.getenv('BUCKET_RRHH')
-        self.bucket_logs = os.getenv('BUCKET_LOGS')
-        
-        # Cliente de S3
-        self.s3_client = boto3.client('s3', region_name=self.region)
-    
-    def get_available_buckets(self, role: str) -> List[str]:
-        """
-        Obtener buckets disponibles según el rol del usuario.
-        
-        Args:
-            role: Rol del usuario (admin, solo-lectura, etc.)
-            
-        Returns:
-            Lista de nombres de buckets disponibles
-        """
-        buckets = []
-        
-        if role == 'admin':
-            # Admin puede ver todos los buckets
-            buckets = [
-                self.bucket_publica,
-                self.bucket_proyectos,
-                self.bucket_rrhh,
-                self.bucket_logs
-            ]
-        elif role in ['lectura-escritura', 'solo-carga', 'solo-descarga']:
-            # Estos roles pueden acceder a publica y proyectos
-            buckets = [
-                self.bucket_publica,
-                self.bucket_proyectos
-            ]
-        elif role == 'solo-lectura':
-            # Solo lectura solo puede ver publica
-            buckets = [self.bucket_publica]
-        
-        return buckets
-    
-    def list_files(self, bucket_name: str) -> Tuple[bool, List[Dict], Optional[str]]:
-        """
-        Listar archivos en un bucket.
-        
-        Args:
-            bucket_name: Nombre del bucket
-            
-        Returns:
-            Tuple (éxito, lista_archivos, mensaje_error)
-        """
-        try:
-            response = self.s3_client.list_objects_v2(Bucket=bucket_name)
-            
-            if 'Contents' not in response:
-                return True, [], None
-            
-            files = []
-            for obj in response['Contents']:
-                file_info = {
-                    'key': obj['Key'],
-                    'name': obj['Key'].split('/')[-1],  # Nombre del archivo
-                    'size': obj['Size'],
-                    'size_mb': round(obj['Size'] / (1024 * 1024), 2),
-                    'last_modified': obj['LastModified'].strftime('%Y-%m-%d %H:%M:%S'),
-                    'storage_class': obj.get('StorageClass', 'STANDARD')
-                }
-                files.append(file_info)
-            
-            # Ordenar por fecha (más recientes primero)
-            files.sort(key=lambda x: x['last_modified'], reverse=True)
-            
-            return True, files, None
-            
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'NoSuchBucket':
-                return False, [], f"El bucket '{bucket_name}' no existe"
-            elif error_code == 'AccessDenied':
-                return False, [], "No tienes permisos para acceder a este bucket"
-            else:
-                return False, [], f"Error: {str(e)}"
-        except Exception as e:
-            return False, [], f"Error inesperado: {str(e)}"
-    
-    def upload_file(self, file_path: str, bucket_name: str, object_key: str) -> Tuple[bool, Optional[str]]:
-        """
-        Subir un archivo a S3.
-        
-        Args:
-            file_path: Ruta local del archivo
-            bucket_name: Nombre del bucket
-            object_key: Nombre del archivo en S3
-            
-        Returns:
-            Tuple (éxito, mensaje_error)
-        """
-        try:
-            self.s3_client.upload_file(file_path, bucket_name, object_key)
-            return True, None
-            
-        except FileNotFoundError:
-            return False, f"El archivo '{file_path}' no existe"
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'AccessDenied':
-                return False, "No tienes permisos para subir archivos a este bucket"
-            else:
-                return False, f"Error: {str(e)}"
-        except Exception as e:
-            return False, f"Error inesperado: {str(e)}"
-    
-    def download_file(self, bucket_name: str, object_key: str, download_path: str) -> Tuple[bool, Optional[str]]:
-        """
-        Descargar un archivo de S3.
-        
-        Args:
-            bucket_name: Nombre del bucket
-            object_key: Nombre del archivo en S3
-            download_path: Ruta local donde guardar
-            
-        Returns:
-            Tuple (éxito, mensaje_error)
-        """
-        try:
-            self.s3_client.download_file(bucket_name, object_key, download_path)
-            return True, None
-            
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'NoSuchKey':
-                return False, f"El archivo '{object_key}' no existe"
-            elif error_code == 'AccessDenied':
-                return False, "No tienes permisos para descargar este archivo"
-            else:
-                return False, f"Error: {str(e)}"
-        except Exception as e:
-            return False, f"Error inesperado: {str(e)}"
-    
-    def delete_file(self, bucket_name: str, object_key: str) -> Tuple[bool, Optional[str]]:
-        """
-        Eliminar un archivo de S3.
-        
-        Args:
-            bucket_name: Nombre del bucket
-            object_key: Nombre del archivo en S3
-            
-        Returns:
-            Tuple (éxito, mensaje_error)
-        """
-        try:
-            self.s3_client.delete_object(Bucket=bucket_name, Key=object_key)
-            return True, None
-            
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'AccessDenied':
-                return False, "No tienes permisos para eliminar archivos"
-            else:
-                return False, f"Error: {str(e)}"
-        except Exception as e:
-            return False, f"Error inesperado: {str(e)}"
-    
-    def get_download_url(self, bucket_name: str, object_key: str, expiration: int = 3600) -> Tuple[bool, Optional[str], Optional[str]]:
-        """
-        Generar URL pre-firmada para descargar un archivo.
-        
-        Args:
-            bucket_name: Nombre del bucket
-            object_key: Nombre del archivo
-            expiration: Tiempo de expiración en segundos (default: 1 hora)
-            
-        Returns:
-            Tuple (éxito, url, mensaje_error)
-        """
-        try:
-            url = self.s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': bucket_name, 'Key': object_key},
-                ExpiresIn=expiration
-            )
-            return True, url, None
-            
-        except ClientError as e:
-            return False, None, f"Error generando URL: {str(e)}"
-        except Exception as e:
-            return False, None, f"Error inesperado: {str(e)}”"""
 Cliente para conectar con AWS OpenSearch
 """
 
@@ -218,8 +6,6 @@ import os
 from typing import List, Dict, Optional, Tuple
 from dotenv import load_dotenv
 from opensearchpy import OpenSearch, RequestsHttpConnection
-from requests_aws4auth import AWS4Auth
-import boto3
 
 # Cargar variables de entorno
 load_dotenv()
@@ -234,24 +20,41 @@ class OpenSearchClient:
         self.region = os.getenv('AWS_REGION')
         self.index_name = os.getenv('OPENSEARCH_INDEX_NAME', 'cloudtrail-logs')
         
-        # Credenciales AWS
-        credentials = boto3.Session().get_credentials()
-        awsauth = AWS4Auth(
-            credentials.access_key,
-            credentials.secret_key,
-            self.region,
-            'es',
-            session_token=credentials.token
-        )
+        # Master user credentials
+        self.master_user = os.getenv('OPENSEARCH_MASTER_USER', 'admin')
+        self.master_password = os.getenv('OPENSEARCH_MASTER_PASSWORD')
         
-        # Cliente OpenSearch
-        self.client = OpenSearch(
-            hosts=[{'host': self.endpoint, 'port': 443}],
-            http_auth=awsauth,
-            use_ssl=True,
-            verify_certs=True,
-            connection_class=RequestsHttpConnection
-        )
+        # Verificar configuración
+        if not self.endpoint:
+            raise ValueError("OPENSEARCH_ENDPOINT no está configurado en .env")
+        
+        if not self.master_password:
+            raise ValueError("OPENSEARCH_MASTER_PASSWORD no está configurado en .env")
+        
+        # DEBUG: Mostrar las credenciales (quitar después de probar)
+        print(f"DEBUG - Endpoint: {self.endpoint}")
+        print(f"DEBUG - Master User: {self.master_user}")
+        print(f"DEBUG - Password length: {len(self.master_password)} caracteres")
+        if self.master_password:
+            print(f"DEBUG - Password starts with: {self.master_password[:3]}...")
+        
+        # Cliente OpenSearch con autenticación básica (master user)
+        try:
+            self.client = OpenSearch(
+                hosts=[{'host': self.endpoint, 'port': 443}],
+                http_auth=(self.master_user, self.master_password),
+                use_ssl=True,
+                verify_certs=True,
+                connection_class=RequestsHttpConnection,
+                timeout=30
+            )
+            
+            # Verificar conexión
+            info = self.client.info()
+            print(f"✅ Conectado a OpenSearch: {info['version']['number']}")
+            
+        except Exception as e:
+            raise ValueError(f"Error conectando a OpenSearch: {str(e)}")
     
     def search_logs(self, query: str = "*", size: int = 100, 
                    start_date: Optional[str] = None,
@@ -272,7 +75,7 @@ class OpenSearchClient:
             # Construir query
             search_query = {
                 "size": size,
-                "sort": [{"eventTime": {"order": "desc"}}],
+                #"sort": [{"event_id": {"order": "desc"}}],
                 "query": {
                     "bool": {
                         "must": []
@@ -285,7 +88,12 @@ class OpenSearchClient:
                 search_query["query"]["bool"]["must"].append({
                     "multi_match": {
                         "query": query,
-                        "fields": ["eventName", "userIdentity.userName", "sourceIPAddress"]
+                        "fields": [
+                            "event_name", 
+                            "user_arn",
+                            "source_ip",
+                            "event_source"
+                        ]
                     }
                 })
             else:
@@ -293,12 +101,11 @@ class OpenSearchClient:
             
             # Agregar filtro de fechas
             if start_date or end_date:
-                date_filter = {"range": {"eventTime": {}}}
-                if start_date:
-                    date_filter["range"]["eventTime"]["gte"] = start_date
-                if end_date:
-                    date_filter["range"]["eventTime"]["lte"] = end_date
-                search_query["query"]["bool"]["must"].append(date_filter)
+                date_filter = {"range": {"timestamp": {}}}
+            if start_date:
+                date_filter["range"]["timestamp"]["gte"] = start_date
+            if end_date:
+                date_filter["range"]["timestamp"]["lte"] = end_date
             
             # Ejecutar búsqueda
             response = self.client.search(
@@ -310,20 +117,42 @@ class OpenSearchClient:
             logs = []
             for hit in response['hits']['hits']:
                 source = hit['_source']
+                
+                # Extraer datos del log (estructura real de tu CloudTrail)
+                # Determinar el usuario
+                user = 'N/A'
+                if source.get('user_arn'):
+                    # Extraer nombre del ARN (última parte después de /)
+                    user_arn = source.get('user_arn')
+                    if '/' in user_arn:
+                        user = user_arn.split('/')[-1]
+                    else:
+                        user = source.get('user_type', 'N/A')
+                else:
+                    user = source.get('user_identity', 'N/A')
+
+                # Extraer recurso (ARN completo)
+                resource = 'N/A'
+                if source.get('resources') and len(source.get('resources')) > 0:
+                    resource = source['resources'][0].get('ARN', 'N/A')
+
                 log_entry = {
-                    'timestamp': source.get('eventTime', 'N/A'),
-                    'event_name': source.get('eventName', 'N/A'),
-                    'user': source.get('userIdentity', {}).get('userName', 'N/A'),
-                    'source_ip': source.get('sourceIPAddress', 'N/A'),
-                    'resource': source.get('resources', [{}])[0].get('ARN', 'N/A') if source.get('resources') else 'N/A',
-                    'event_type': source.get('eventType', 'N/A'),
+                    'timestamp': source.get('timestamp', 'N/A'),
+                    'event_name': source.get('event_name', 'N/A'),
+                    'user': user,
+                    'source_ip': source.get('source_ip', 'N/A'),
+                    'resource': resource,
+                    'event_type': source.get('event_type', 'N/A'),
+                    'event_source': source.get('event_source', 'N/A'),
                 }
                 logs.append(log_entry)
             
             return True, logs, None
             
         except Exception as e:
-            return False, [], f"Error buscando logs: {str(e)}"
+            error_msg = f"Error buscando logs: {str(e)}"
+            print(error_msg)
+            return False, [], error_msg
     
     def get_recent_logs(self, limit: int = 50) -> Tuple[bool, List[Dict], Optional[str]]:
         """
@@ -352,7 +181,7 @@ class OpenSearchClient:
     
     def get_event_stats(self) -> Tuple[bool, Dict, Optional[str]]:
         """
-        Obtener estadísticas de eventos.
+        Obtener estadísticas de eventos usando agregaciones.
         
         Returns:
             Tuple (éxito, estadísticas, mensaje_error)
@@ -364,13 +193,19 @@ class OpenSearchClient:
                 "aggs": {
                     "events_by_name": {
                         "terms": {
-                            "field": "eventName.keyword",
+                            "field": "event_name.keyword",
                             "size": 10
                         }
                     },
-                    "events_by_user": {
+                    "events_by_source": {
                         "terms": {
-                            "field": "userIdentity.userName.keyword",
+                            "field": "event_source.keyword",
+                            "size": 10
+                        }
+                    },
+                    "events_by_type": {
+                        "terms": {
+                            "field": "event_type.keyword",
                             "size": 10
                         }
                     }
@@ -382,6 +217,7 @@ class OpenSearchClient:
                 body=agg_query
             )
             
+            # Procesar agregaciones
             stats = {
                 'total_events': response['hits']['total']['value'],
                 'top_events': [
@@ -391,10 +227,29 @@ class OpenSearchClient:
                 'top_users': [
                     {'name': bucket['key'], 'count': bucket['doc_count']}
                     for bucket in response['aggregations']['events_by_user']['buckets']
+                ],
+                'top_sources': [
+                    {'name': bucket['key'], 'count': bucket['doc_count']}
+                    for bucket in response['aggregations']['events_by_source']['buckets']
                 ]
             }
             
             return True, stats, None
             
         except Exception as e:
-            return False, {}, f"Error obteniendo estadísticas: {str(e)}"
+            error_msg = f"Error obteniendo estadísticas: {str(e)}"
+            print(error_msg)
+            return False, {}, error_msg
+    
+    def test_connection(self) -> Tuple[bool, str]:
+        """
+        Probar conexión a OpenSearch.
+        
+        Returns:
+            Tuple (éxito, mensaje)
+        """
+        try:
+            info = self.client.info()
+            return True, f"Conexión exitosa. OpenSearch {info['version']['number']}"
+        except Exception as e:
+            return False, f"Error de conexión: {str(e)}"
