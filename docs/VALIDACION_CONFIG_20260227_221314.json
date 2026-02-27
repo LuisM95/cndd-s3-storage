@@ -1,0 +1,72 @@
+{
+  "fecha": "2026-02-27T22:13:14.957390",
+  "estadisticas": {
+    "total": 12,
+    "exitosas": 12,
+    "fallidas": 0,
+    "advertencias": 1,
+    "porcentaje_exito": 100.0
+  },
+  "detalles": [
+    {
+      "componente": "S3 Bucket: cndd-publica",
+      "estado": "OK",
+      "detalles": "Bucket configurado correctamente"
+    },
+    {
+      "componente": "S3 Bucket: cndd-proyectos",
+      "estado": "OK",
+      "detalles": "Bucket configurado correctamente"
+    },
+    {
+      "componente": "S3 Bucket: cndd-recursoshumanos",
+      "estado": "OK",
+      "detalles": "Bucket configurado correctamente"
+    },
+    {
+      "componente": "S3 Bucket: cndd-logs",
+      "estado": "OK",
+      "detalles": "Bucket configurado correctamente"
+    },
+    {
+      "componente": "Cognito User Pool",
+      "estado": "OK",
+      "detalles": "5 usuarios, 5 grupos"
+    },
+    {
+      "componente": "IAM Role: Cognito-Admin",
+      "estado": "OK",
+      "detalles": "1 pol\u00edticas"
+    },
+    {
+      "componente": "IAM Role: Cognito-LecturaEscritura",
+      "estado": "OK",
+      "detalles": "1 pol\u00edticas"
+    },
+    {
+      "componente": "IAM Role: Cognito-SoloLectura",
+      "estado": "OK",
+      "detalles": "1 pol\u00edticas"
+    },
+    {
+      "componente": "IAM Role: Cognito-SoloCarga",
+      "estado": "OK",
+      "detalles": "1 pol\u00edticas"
+    },
+    {
+      "componente": "IAM Role: Cognito-SoloDescarga",
+      "estado": "OK",
+      "detalles": "1 pol\u00edticas"
+    },
+    {
+      "componente": "OpenSearch Domain",
+      "estado": "OK",
+      "detalles": "Versi\u00f3n OpenSearch_2.11"
+    },
+    {
+      "componente": "CloudTrail",
+      "estado": "OK",
+      "detalles": "1 trail(s) configurado(s)"
+    }
+  ]
+}

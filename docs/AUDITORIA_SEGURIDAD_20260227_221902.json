@@ -1,0 +1,154 @@
+{
+  "fecha": "2026-02-27T22:19:02.036606",
+  "estadisticas": {
+    "total": 22,
+    "aprobadas": 20,
+    "criticas": 1,
+    "altas": 0,
+    "medias": 1,
+    "bajas": 0,
+    "porcentaje_cumplimiento": 90.91
+  },
+  "hallazgos": {
+    "critical": [
+      {
+        "componente": "S3: cndd-publica",
+        "verificacion": "Bloqueo acceso público",
+        "estado": "FAIL",
+        "detalles": "Acceso público NO bloqueado completamente (CRÍTICO)"
+      }
+    ],
+    "high": [],
+    "medium": [
+      {
+        "componente": "Cognito",
+        "verificacion": "MFA",
+        "estado": "WARN",
+        "detalles": "MFA no habilitado (recomendado para producción)"
+      }
+    ],
+    "low": [],
+    "passed": [
+      {
+        "componente": "S3: cndd-publica",
+        "verificacion": "Cifrado en reposo",
+        "estado": "PASS",
+        "detalles": "AES-256 habilitado"
+      },
+      {
+        "componente": "S3: cndd-proyectos",
+        "verificacion": "Cifrado en reposo",
+        "estado": "PASS",
+        "detalles": "AES-256 habilitado"
+      },
+      {
+        "componente": "S3: cndd-recursoshumanos",
+        "verificacion": "Cifrado en reposo",
+        "estado": "PASS",
+        "detalles": "AES-256 habilitado"
+      },
+      {
+        "componente": "S3: cndd-logs",
+        "verificacion": "Cifrado en reposo",
+        "estado": "PASS",
+        "detalles": "AES-256 habilitado"
+      },
+      {
+        "componente": "S3: cndd-publica",
+        "verificacion": "Versionado",
+        "estado": "PASS",
+        "detalles": "Versionado habilitado"
+      },
+      {
+        "componente": "S3: cndd-proyectos",
+        "verificacion": "Versionado",
+        "estado": "PASS",
+        "detalles": "Versionado habilitado"
+      },
+      {
+        "componente": "S3: cndd-recursoshumanos",
+        "verificacion": "Versionado",
+        "estado": "PASS",
+        "detalles": "Versionado habilitado"
+      },
+      {
+        "componente": "S3: cndd-logs",
+        "verificacion": "Versionado",
+        "estado": "PASS",
+        "detalles": "Versionado habilitado"
+      },
+      {
+        "componente": "S3: cndd-proyectos",
+        "verificacion": "Bloqueo acceso público",
+        "estado": "PASS",
+        "detalles": "Acceso público bloqueado completamente"
+      },
+      {
+        "componente": "S3: cndd-recursoshumanos",
+        "verificacion": "Bloqueo acceso público",
+        "estado": "PASS",
+        "detalles": "Acceso público bloqueado completamente"
+      },
+      {
+        "componente": "S3: cndd-logs",
+        "verificacion": "Bloqueo acceso público",
+        "estado": "PASS",
+        "detalles": "Acceso público bloqueado completamente"
+      },
+      {
+        "componente": "Cognito",
+        "verificacion": "Política de contraseñas",
+        "estado": "PASS",
+        "detalles": "Longitud mínima: 8 caracteres"
+      },
+      {
+        "componente": "IAM: Cognito-Admin",
+        "verificacion": "Políticas inline",
+        "estado": "PASS",
+        "detalles": "Sin políticas inline (buena práctica)"
+      },
+      {
+        "componente": "IAM: Cognito-LecturaEscritura",
+        "verificacion": "Políticas inline",
+        "estado": "PASS",
+        "detalles": "Sin políticas inline (buena práctica)"
+      },
+      {
+        "componente": "IAM: Cognito-SoloLectura",
+        "verificacion": "Políticas inline",
+        "estado": "PASS",
+        "detalles": "Sin políticas inline (buena práctica)"
+      },
+      {
+        "componente": "IAM: Cognito-SoloCarga",
+        "verificacion": "Políticas inline",
+        "estado": "PASS",
+        "detalles": "Sin políticas inline (buena práctica)"
+      },
+      {
+        "componente": "IAM: Cognito-SoloDescarga",
+        "verificacion": "Políticas inline",
+        "estado": "PASS",
+        "detalles": "Sin políticas inline (buena práctica)"
+      },
+      {
+        "componente": "OpenSearch",
+        "verificacion": "Cifrado en reposo",
+        "estado": "PASS",
+        "detalles": "Cifrado habilitado"
+      },
+      {
+        "componente": "OpenSearch",
+        "verificacion": "HTTPS",
+        "estado": "PASS",
+        "detalles": "HTTPS obligatorio"
+      },
+      {
+        "componente": "CloudTrail",
+        "verificacion": "Logging activo",
+        "estado": "PASS",
+        "detalles": "1 trail(s) activo(s)"
+      }
+    ]
+  }
+}

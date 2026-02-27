@@ -1,0 +1,41 @@
+{
+  "fecha": "2026-02-27T22:22:07.061165",
+  "estadisticas": {
+    "total": 6,
+    "exitosas": 6,
+    "fallidas": 0,
+    "porcentaje_exito": 100.0
+  },
+  "resultados": [
+    {
+      "Prueba": "Verificar grupos: andre00ti@gmail.com",
+      "Resultado": "PASS",
+      "Detalles": "Grupos: solo-lectura"
+    },
+    {
+      "Prueba": "Verificar grupos: munmart95@gmail.com",
+      "Resultado": "PASS",
+      "Detalles": "Grupos: lectura-escritura"
+    },
+    {
+      "Prueba": "Verificar grupos: kikemun95@gmail.com",
+      "Resultado": "PASS",
+      "Detalles": "Grupos: admin, lectura-escritura"
+    },
+    {
+      "Prueba": "S3 Upload: cndd-publica",
+      "Resultado": "PASS",
+      "Detalles": "Archivo subido correctamente"
+    },
+    {
+      "Prueba": "S3 Download: cndd-publica",
+      "Resultado": "PASS",
+      "Detalles": "Archivo descargado correctamente"
+    },
+    {
+      "Prueba": "S3 Delete: cndd-publica",
+      "Resultado": "PASS",
+      "Detalles": "Archivo eliminado correctamente"
+    }
+  ]
+}
