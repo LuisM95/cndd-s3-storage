@@ -3,8 +3,8 @@ runtime: python311
 build:
   commands:
     build:
-      - pip install --upgrade pip
-      - pip install -r requirements.txt
+      - python3.11 -m pip install --upgrade pip
+      - python3.11 -m pip install -r requirements.txt
 run:
   runtime-version: 3.11
   command: sh -c "reflex init && reflex run --env prod --backend-only --loglevel info"
